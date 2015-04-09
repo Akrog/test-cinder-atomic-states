@@ -18,7 +18,7 @@ def _retry_on_deadlock(f):
                     raise
                 session.rollback()
                 # Retry!
-                time.sleep(0.5)
+                #time.sleep(0.1)
                 continue
     functools.update_wrapper(wrapped, f)
     return wrapped
@@ -30,11 +30,11 @@ def make_change(session, vol_id, initial, destination, attach_status):
         vol = session.query(db.Volume).with_for_update().get(vol_id)
         if vol.status == initial:
             break
-        #session.commit()
         session.rollback()
         time.sleep(0.1)
         i += 1
-        if i == 10:
+        if i == 100:
+            print 'Fuck'
             raise Exception ('Fuck')
 
         del vol
