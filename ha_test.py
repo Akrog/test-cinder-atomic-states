@@ -74,7 +74,7 @@ def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
             try:
                 marker = '%s_%s' % (worker_id, i)
                 time_start = time.time()
-                changer(session, vol_id, 'available', 'deleting', marker)
+                deadlocks = changer(session, vol_id, 'available', 'deleting', marker)
                 time_end = time.time()
                 change_1_time = time_end - time_start
                 #time.sleep(0.1)
@@ -85,7 +85,7 @@ def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
                 time_start = time.time()
                 while True:
                     try:
-                        changer(session, vol_id, 'deleting', 'available', marker)
+                        deadlocks += changer(session, vol_id, 'deleting', 'available', marker)
                     except OperationalError as e:
                         if DEBUG: print 'ERROR: ', e
                         session.rollback()
@@ -95,11 +95,11 @@ def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
                     # We cannot let it on deleting or it will prevent other workers from doing anything
                 time_end = time.time()
                 change_2_time = time_end - time_start
-                results.append(('Ok %s' % i, change_1_time, change_2_time))
+                results.append(('OK %s' % i, change_1_time, change_2_time, deadlocks))
             except Exception as e:
                 if DEBUG: print '... ERROR', str(e)
                 session.rollback()
-                results.append(("Exception on %s: %s" % (i, e), None, None))
+                results.append(("Exception on %s: %s" % (i, e), None, None, 0))
     return {'id': worker_id, 'result': results, 'profile': prepare_profile_info(profile)}
 
 
@@ -115,12 +115,14 @@ def display_results(results):
     pattern = "<method '"
     i = 0
     errors = 0
+    deadlocks = 0
     total_time = 0.0
     for x in results:
         for d in x['result']:
-            if d[0].startswith('Ok'):
+            if d[0].startswith('OK'):
                 i += 1 
                 total_time += d[1]
+                deadlocks += d[3] 
             else:
                 errors += 1
     sql = list(filter(lambda r: 'sql' in r['name'] and r['name'].startswith(pattern), result['profile']) for result in results)
@@ -132,6 +134,7 @@ def display_results(results):
 
     if i:
         print 'Errors:', errors
+        print 'Deadlocks:', deadlocks
         print 'Average time for each change is %.2fms' % ((total_time / i) * 1000)
         for name, data in acc.iteritems():
             i = len(pattern)

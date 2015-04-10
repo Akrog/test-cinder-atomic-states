@@ -47,12 +47,15 @@ def _retry_on_deadlock(f):
     """Decorator to retry a DB API call if Deadlock was received."""
     @functools.wraps(f)
     def wrapped(session, *args, **kwargs):
+        deadlocks = 0
         while True:
             try:
-                return f(session, *args, **kwargs)
+                f(session, *args, **kwargs)
+                return deadlocks
             except OperationalError as e:
                 if not e.args[0].startswith("(OperationalError) (1213, 'Deadlock found"):
                     raise
+                deadlocks += 1
                 # Retry!
                 #time.sleep(0.1)
                 continue
