@@ -1,5 +1,7 @@
 #!/bin/env python
 
+import pdb
+
 import os
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -8,7 +10,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import uuid
 from sqlalchemy import and_
-
+import cProfile
+import StringIO
+import pstats
+import contextlib
 
 Base = declarative_base()
 
@@ -66,3 +71,18 @@ class Db(object):
         if missing > 0:
             for __ in xrange(missing):
                 self.session.add(Volume(id=uuid.uuid1(), status='available'))
+
+@contextlib.contextmanager
+def profiled():
+    pr = cProfile.Profile()
+    pr.enable()
+    yield pr
+    #pdb.set_trace()
+    pr.disable()
+    #s = StringIO.StringIO()
+    #ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+    #ps.print_stats()
+    ## uncomment this to see who's calling what
+    ## ps.print_callers()
+    #print s.getvalue()
+

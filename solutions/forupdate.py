@@ -31,11 +31,11 @@ def make_change(session, vol_id, initial, destination, attach_status):
         if vol.status == initial:
             break
         session.rollback()
-        time.sleep(0.1)
-        i += 1
-        if i == 100:
-            print 'Fuck'
-            raise Exception ('Fuck')
+        #time.sleep(0.1)
+        #i += 1
+        #if i == 100:
+        #    print 'Fuck'
+        #    raise Exception ('Fuck')
 
         del vol
     vol.status = destination
