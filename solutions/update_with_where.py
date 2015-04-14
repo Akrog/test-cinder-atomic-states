@@ -57,7 +57,7 @@ def _retry_on_deadlock(f):
                     raise
                 deadlocks += 1
                 # Retry!
-                #time.sleep(0.1)
+                time.sleep(0.01)
                 continue
     functools.update_wrapper(wrapped, f)
     return wrapped
@@ -65,5 +65,8 @@ def _retry_on_deadlock(f):
 @_retry_on_deadlock
 def make_change(session, vol_id, initial, destination, attach_status):
     n = 0
-    while n == 0:
+    while True:
         n = safe_update(session, vol_id, {'status': destination, 'attach_status': attach_status}, {'status': initial})
+        if n != 0:
+            return
+        time.sleep(0.01)

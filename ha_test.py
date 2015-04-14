@@ -73,11 +73,12 @@ def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
         for i in xrange(NUM_TESTS_PER_WORKER):
             try:
                 marker = '%s_%s' % (worker_id, i)
+                time.sleep(0.005)
                 time_start = time.time()
                 deadlocks = changer(session, vol_id, 'available', 'deleting', marker)
                 time_end = time.time()
                 change_1_time = time_end - time_start
-                #time.sleep(0.1)
+                time.sleep(0.01)
                 if DEBUG: print 'Checking deleting', marker,
                 check_volume(nodes, vol_id, {'status': 'deleting', 'attach_status': marker})
                 if DEBUG: print '... OK'
@@ -87,7 +88,7 @@ def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
                     try:
                         deadlocks += changer(session, vol_id, 'deleting', 'available', marker)
                     except OperationalError as e:
-                        if DEBUG: print 'ERROR: ', e
+                        print 'ERROR: ', e
                         session.rollback()
                     else:
                         #time.sleep(0.05)

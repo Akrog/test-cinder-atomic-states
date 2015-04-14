@@ -18,10 +18,9 @@ def _retry_on_deadlock(f):
             except OperationalError as e:
                 if not e.args[0].startswith("(OperationalError) (1213, 'Deadlock found"):
                     raise
-                session.rollback()
                 deadlocks += 1
                 # Retry!
-                #time.sleep(0.1)
+                time.sleep(0.01)
                 continue
     functools.update_wrapper(wrapped, f)
     return wrapped
@@ -36,3 +35,4 @@ def make_change(session, vol_id, initial, destination, attach_status):
                 vol.attach_status = attach_status
                 #session.commit()
                 return
+            time.sleep(0.01)
