@@ -3,7 +3,7 @@ import functools
 import time
 from sqlalchemy.exc import OperationalError
 
-session_cfg = {'autocommit': False, 'expire_on_commit': True}
+session_cfg = {'autocommit': True, 'expire_on_commit': True}
 
 
 def _retry_on_deadlock(f):
@@ -28,19 +28,11 @@ def _retry_on_deadlock(f):
 
 @_retry_on_deadlock
 def make_change(session, vol_id, initial, destination, attach_status):
-    i = 0
     while True:
-        vol = session.query(db.Volume).with_for_update().get(vol_id)
-        if vol.status == initial:
-            break
-        session.rollback()
-        #time.sleep(0.1)
-        #i += 1
-        #if i == 100:
-        #    print 'Fuck'
-        #    raise Exception ('Fuck')
-
-        del vol
-    vol.status = destination
-    vol.attach_status = attach_status
-    session.commit()
+        with session.begin():
+            vol = session.query(db.Volume).with_for_update().get(vol_id)
+            if vol.status == initial:
+                vol.status = destination
+                vol.attach_status = attach_status
+                #session.commit()
+                return
