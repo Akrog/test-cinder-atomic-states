@@ -36,7 +36,7 @@ def make_change(session, vol_id, initial, destination, attach_status):
     global coordinator
     global lock
     if coordinator is None:
-        coordinator = coordination.get_coordinator('file://' + os.getcwd(), str(session))
+        coordinator = coordination.get_coordinator('redis://192.168.1.14', str(session))
         coordinator.start()
         lock = coordinator.get_lock(vol_id)
     while True:
