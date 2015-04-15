@@ -82,7 +82,9 @@ def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
                 time_end = time.time()
                 change_1_time = time_end - time_start
                 LOG.info('Checking deleting %s', marker)
+                profile.disable()
                 check_volume(nodes, vol_id, {'status': 'deleting', 'attach_status': marker})
+                profile.enable()
                 LOG.info('Check OK for %s', marker)
 
                 time_start = time.time()
@@ -122,11 +124,13 @@ def display_results(results):
     errors = 0
     deadlocks = 0
     total_time = 0.0
+    total_delete_time = 0.0
     for x in results:
         for d in x['result']:
             if d[0].startswith('OK'):
                 i += 1 
                 total_time += d[1]
+                total_delete_time += d[2]
                 deadlocks += d[3] 
             else:
                 errors += 1
@@ -140,7 +144,7 @@ def display_results(results):
     if i:
         print 'Errors:', errors
         print 'Deadlocks:', deadlocks
-        print 'Average time for each change is %.2fms' % ((total_time / i) * 1000)
+        print 'Average time for each change is %.2fms and deletion is %.2fms' % ((total_time / i) * 1000, (total_delete_time / i) * 1000)
         for name, data in acc.iteritems():
             i = len(pattern)
             n = name[i:name.index("'", i)]
