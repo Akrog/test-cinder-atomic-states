@@ -8,26 +8,25 @@ import db
 from tester import Tester
 import time
 from sqlalchemy.exc import OperationalError
+import logging
 
-DEBUG = False
 NUM_WORKERS = 5 
 NUM_TESTS_PER_WORKER = 100
 
-def my_func():
-    
-    return {'args': args, 'kwargs': kwargs}
+LOG = logging
+LOG.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
+
 
 def check_volume(nodes, vol_id, data):
     def _check_volume():
         for node in nodes:
-            if DEBUG: print '+',
-            vol = node[1].query(db.Volume).get(vol_id)
+            LOG.debug('Checking node %s for %s', node, data)
+            # Check directly through the engine to avoid transactions and caching
+            vol = node[1].bind.execute("select * from volumes where id='" + vol_id + "'").first()
             for k, v in data.iteritems():
-                if DEBUG: print '.',
                 d = getattr(vol, k)
                 if d != v:
-                    if DEBUG: print '-', d, '!=', v,
-                    node[1].expire(vol)
+                    LOG.debug('Error on key %s: %s != %s', k, v, d)
                     raise Exception('Wrong data in server %s in %s, key %s %s != %s' % (node[2], vol_id, k, v, d))
 
     num_tries = 3
@@ -36,9 +35,11 @@ def check_volume(nodes, vol_id, data):
             _check_volume()
             return
         except:
-            if i < num_tries:
-                time.sleep(0.1)
+            if i < num_tries - 1:
+                LOG.warning('Check retry, possible propagation delay with changes %s', data)
+                time.sleep(1 * (i+1))
             else:
+                LOG.debug('Checking %s', data)
                 raise
 
 def prepare_profile_info(profile):
@@ -51,6 +52,7 @@ def prepare_profile_info(profile):
         profile.getstats())
     return result
 
+
 def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
     node_ips = db_data.pop('node_ips', [])
 
@@ -62,45 +64,47 @@ def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
         session = database.session
         nodes.append((database, session, node_ip))
 
-    db_data['session_cfg'] = session_cfg
+    if session_cfg:
+        db_data['session_cfg'] = session_cfg
     database = db.Db(**db_data)
     session = database.session
        
     results = []
     vol_id = database.current_uuids[0]
-    #return vol_id
     with db.profiled() as profile:
         for i in xrange(NUM_TESTS_PER_WORKER):
             try:
                 marker = '%s_%s' % (worker_id, i)
+                LOG.info('Start %s', marker)
                 time.sleep(0.005)
                 time_start = time.time()
                 deadlocks = changer(session, vol_id, 'available', 'deleting', marker)
                 time_end = time.time()
                 change_1_time = time_end - time_start
-                time.sleep(0.01)
-                if DEBUG: print 'Checking deleting', marker,
+                LOG.info('Checking deleting %s', marker)
                 check_volume(nodes, vol_id, {'status': 'deleting', 'attach_status': marker})
-                if DEBUG: print '... OK'
+                LOG.info('Check OK for %s', marker)
 
                 time_start = time.time()
                 while True:
                     try:
+                        LOG.info('Changing %s to available', marker)
                         deadlocks += changer(session, vol_id, 'deleting', 'available', marker)
+                        LOG.info('Changed %s to available', marker)
                     except OperationalError as e:
-                        print 'ERROR: ', e
+                        LOG.warning('ERROR changing to available %s: %s', marker, e)
                         session.rollback()
                     else:
-                        #time.sleep(0.05)
                         break
                     # We cannot let it on deleting or it will prevent other workers from doing anything
                 time_end = time.time()
                 change_2_time = time_end - time_start
                 results.append(('OK %s' % i, change_1_time, change_2_time, deadlocks))
             except Exception as e:
-                if DEBUG: print '... ERROR', str(e)
+                LOG.error('On %s: %s', marker, e)
                 session.rollback()
                 results.append(("Exception on %s: %s" % (i, e), None, None, 0))
+    LOG.info('Worker %s has finished', worker_id)
     return {'id': worker_id, 'result': results, 'profile': prepare_profile_info(profile)}
 
 
@@ -160,13 +164,10 @@ if __name__ == '__main__':
 
     for solution in solutions:
         print '\nRunning', solution.__name__
-        #with db.profiled() as pr:
         tester = Tester(do_test, None, db_data, solution.make_change, solution.session_cfg, uuids[0])
         start = time.time()
         result = list(tester.run(NUM_WORKERS))
         end = time.time()
-        #pdb.set_trace()
-        if DEBUG: pprint(result)
         print 'Time %.2f secs' % (end - start)
         display_results(result)
 
