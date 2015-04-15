@@ -58,7 +58,7 @@ class Db(object):
     def get_engine(self):
         return self.engine
 
-    def create_session(self, autocommit=True, expire_on_commit=False, *args, **kwargs):
+    def create_session(self, autocommit=False, expire_on_commit=False, *args, **kwargs):
         return sessionmaker(bind=self.engine, autocommit=autocommit,
                             expire_on_commit=expire_on_commit, *args, **kwargs)()
 
