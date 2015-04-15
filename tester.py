@@ -5,7 +5,7 @@ from multiprocessing import Pool
 class Tester(object):
     def __init__(self, worker, params=None, *args, **kwargs):
         self.worker = worker
-        self.params = params
+        self.params = params if hasattr(params, 'next') else iter(params or tuple())
         self.args = args
         self.kwargs = kwargs
 
@@ -17,9 +17,12 @@ class Tester(object):
             args = [i]
             args.extend(self.args)
             kwargs = self.kwargs.copy()
-            if self.params and len(self.params) > i:
-                args.extend(self.params[i].get('args', []))
-                kwargs.update(self.params[i].get('kwargs', {}))             
+            try:
+                params = self.params.next()
+                args.extend(params.get('args', []))
+                kwargs.update(params.get('kwargs', {}))
+            except StopIteration:
+                pass
             
             workers.append(pool.apply_async(self.worker, args, kwargs))
 
