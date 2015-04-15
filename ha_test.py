@@ -2,6 +2,7 @@
 import pdb
 
 
+import itertools as it
 from pprint import pprint
 from collections import defaultdict
 import db
@@ -53,7 +54,7 @@ def prepare_profile_info(profile):
     return result
 
 
-def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
+def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **kwargs):
     node_ips = db_data.pop('node_ips', [])
 
     db_cfg = db_data.copy()
@@ -70,7 +71,7 @@ def do_test(worker_id, db_data, changer, session_cfg={}, *args, **kwargs):
     session = database.session
        
     results = []
-    vol_id = database.current_uuids[0]
+    vol_id = vol_id or database.current_uuids[0]
     with db.profiled() as profile:
         for i in xrange(NUM_TESTS_PER_WORKER):
             try:
@@ -114,7 +115,7 @@ def populate_database(user, passwd, ip):
     database = db.Db(user=user, pwd=passwd, ip=ip)
     database.create_table()
     database.populate()
-    uuids = database.current_uuids[0]
+    uuids = database.current_uuids
     database.close()
     return (uuids)
 
@@ -168,7 +169,8 @@ if __name__ == '__main__':
 
     for solution in solutions:
         print '\nRunning', solution.__name__
-        tester = Tester(do_test, None, db_data, solution.make_change, solution.session_cfg, uuids[0])
+        #tester = Tester(do_test, None, db_data, solution.make_change, solution.session_cfg, uuids[0])
+        tester = Tester(do_test, it.repeat({'args': (uuids[0],)}), db_data, solution.make_change, solution.session_cfg)
         start = time.time()
         result = list(tester.run(NUM_WORKERS))
         end = time.time()
