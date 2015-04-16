@@ -68,9 +68,11 @@ class Db(object):
             
     def populate(self, num_volumes=10):
         missing = num_volumes - self.session.query(Volume).count()
+        self.session.query(Volume).update({Volume.status: 'available'})
         if missing > 0:
             for __ in xrange(missing):
                 self.session.add(Volume(id=uuid.uuid1(), status='available'))
+        self.session.commit()
 
 @contextlib.contextmanager
 def profiled():
