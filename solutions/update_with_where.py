@@ -32,15 +32,16 @@ def safe_update(session, instance_id, values, expected_values):
         return 1	
 
     conn = session.connection()	
-    inst_tab = db.Volume.__table__	
-    where_conds = [inst_tab.c.id == instance_id]	
+    inst_tab = db.Volume.__table__
+    where_conds = [inst_tab.c.id == instance_id]
     for field, value in expected_values.items():
-        where_conds.append(inst_tab.c[field] == value)	
-    upd_stmt = inst_tab.update().where(and_(*where_conds)).values(**values)	
-    res = conn.execute(upd_stmt)	
+        where_conds.append(inst_tab.c[field] == value)
+    upd_stmt = inst_tab.update().where(and_(*where_conds)).values(**values)
+    try:
+        res = conn.execute(upd_stmt)
+    finally:
+        conn.close()
     return res.rowcount	
-
-
 
 
 def _retry_on_deadlock(f):
@@ -54,6 +55,7 @@ def _retry_on_deadlock(f):
                 return deadlocks
             except OperationalError as e:
                 if not e.args[0].startswith("(OperationalError) (1213, 'Deadlock found"):
+                    print 'Error', session, e
                     raise
                 deadlocks += 1
                 # Retry!
