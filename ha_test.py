@@ -97,8 +97,9 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
             profile.enable()
             time_start = time.time()
             r = changer(session, vol_id, 'available', 'deleting', marker)
-            #result.deadlocks, result.timeouts, result.disconnect = r
-            result.deadlocks = r
+            # Update result values for deadlocks, timeouts, etc.
+            for k, v in r.iteritems():
+                setattr(result, k, v)
             time_end = time.time()
             profile.disable()
             result.acquire = time_end - time_start
@@ -127,15 +128,15 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
                     time_end = time.time()
                     profile.disable()
                     result.release += time_end - time_start
-                    #result.deadlocks += r[0]
-                    result.deadlocks += r
-                    #result.timeouts += r[1]
-                    #result.disconnect += r[2]
+
+                    # Update result values for deadlocks, timeouts, etc.
+                    for k, v in r.iteritems():
+                        setattr(result, k, getattr(result, k) + v)
                     LOG.info('Changed %s to available', marker)
                 except OperationalError as e:
                     LOG.warning('ERROR changing to available %s: %s', marker, e)
                     session.rollback()
-                except:
+                except Exception as e:
                     LOG.warning('Unexpected changing %s: %s', marker, e)
                     session.rollback()
                 else:
@@ -157,7 +158,9 @@ def get_solutions():
     import pkgutil
 
     package = 'solutions'
-    solution_names = ['.' + name for _, name, _ in pkgutil.iter_modules([package])]
+    solution_names = ['.' + name
+                      for _, name, _ in pkgutil.iter_modules([package])
+                      if not name.startswith('_')]
     return map(lambda name: import_module(name, package), solution_names)
 
 

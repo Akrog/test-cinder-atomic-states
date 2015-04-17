@@ -2,12 +2,16 @@
 
 import pdb
 
+import functools
 import os
+import time
+
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import OperationalError
 import uuid
 from sqlalchemy import and_
 import cProfile
@@ -111,3 +115,48 @@ def populate_database(db_data, num_rows):
     uuids = database.current_uuids[:num_rows]
     database.close()
     return (uuids)
+
+
+RETRY_TIMEOUT = ('timeouts', 1205, 'Lock wait timeout exceeded')
+RETRY_DEADLOCKS = ('deadlocks', 1213, 'Deadlock found')
+RETRY_GONE = ('disconnect', 2006, 'MySQL server has gone away')
+RETRY_GONE2 = ('disconnect', 2013, 'Lost connection to MySQL')
+RETRY_GONE3 = ('disconnect', 2014, 'Lost connection to MySQL')
+RETRY_GONE4 = ('disconnect', 2045, 'Lost connection to MySQL')
+RETRY_GONE5 = ('disconnect', 2055, 'Lost connection to MySQL')
+ALL_RETRIES = (RETRY_TIMEOUT, RETRY_DEADLOCKS, RETRY_GONE, RETRY_GONE2,
+               RETRY_GONE3, RETRY_GONE4, RETRY_GONE5)
+
+def retry_on_operational_error(method_or_which_cases):
+    """Decorator to retry a DB API call if Deadlock was received."""
+    def wrapper(f, which_cases=method_or_which_cases):
+        @functools.wraps(f)
+        def wrapped(session, *args, **kwargs):
+            result = {case[0]: 0 for case in which_cases}
+            while True:
+                try:
+                    f(session, *args, **kwargs)
+                    return result
+                except OperationalError as e:
+                    #print 'Operational', e
+                    for case in which_cases:
+                        #print 'Trying with', case
+                        if e.args[0].startswith("(OperationalError) (%d, '%s" %
+                                                (case[1], case[2])):
+                            #print 'found'
+                            result[case[0]] += 1
+                            break
+                    else:
+                        raise
+
+                    #print 'retyring'
+                    # We wait a little bit before retrying
+                    time.sleep(0.01)
+
+        functools.update_wrapper(wrapped, f)
+        return wrapped
+
+    if callable(method_or_which_cases):
+        return wrapper(method_or_which_cases, ALL_RETRIES)
+
+    return wrapper
