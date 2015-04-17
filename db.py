@@ -108,6 +108,6 @@ def populate_database(db_data, num_rows):
     database = Db(**db_data)
     database.create_table()
     database.populate(num_rows)
-    uuids = database.current_uuids
+    uuids = database.current_uuids[:num_rows]
     database.close()
     return (uuids)

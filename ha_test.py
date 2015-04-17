@@ -70,17 +70,23 @@ def check_volume(db_cfg, vol_id, data):
                 raise
 
 
-def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None,
+def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
             *args, **kwargs):
+    """Perform tests for atomic changes of rows in the database.
+    
+    Will perform num_tests changes from available to deleting and back to
+    available, always checking that changes are consistent across all nodes of
+    the database.
+    """
     db_cfg = db_data.copy()
     database = db.Db(session_cfg=session_cfg, **db_cfg)
     
     session = database.session
-       
+ 
     results = []
     vol_id = vol_id or database.current_uuids[0]
     with db.profiled(enabled=False) as profile:
-        for i in xrange(NUM_TESTS_PER_WORKER):
+        for i in xrange(num_tests):
             try:
                 marker = '%s_%s' % (worker_id, i)
                 LOG.info('Start %s', marker)
@@ -156,7 +162,13 @@ if __name__ == '__main__':
 
     for solution in solutions:
         print '\nRunning', solution.__name__
-        tester = Tester(do_test, it.cycle(tuple({'args': (uuids[i],)} for i in xrange(NUM_ROWS))), db_data, solution.make_change, solution.session_cfg)
+        tester = Tester(
+            do_test,
+            it.cycle({'args': (uuid,)} for uuid in uuids),
+            NUM_TESTS_PER_WORKER,
+            db_data,
+            solution.make_change,
+            solution.session_cfg)
         start = time.time()
         result = list(tester.run(NUM_WORKERS))
         end = time.time()
