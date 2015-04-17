@@ -1,15 +1,17 @@
 #!/bin/env python
+
+from pprint import pprint
 import pdb
 
-
 import itertools as it
-from pprint import pprint
-from collections import defaultdict
-import db
-from tester import Tester
-import time
-from sqlalchemy.exc import OperationalError
 import logging
+import time
+
+from sqlalchemy.exc import OperationalError
+
+import db
+import results
+from tester import Tester
 
 NUM_ROWS = 5
 WORKERS_PER_ROW = 2
@@ -135,39 +137,6 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
     return {'id': worker_id, 'result': results, 'profile': prepare_profile_info(profile)}
 
 
-def display_results(results):
-    pattern = "<method '"
-    i = 0
-    errors = 0
-    deadlocks = 0
-    total_time = 0.0
-    total_delete_time = 0.0
-    for x in results:
-        for d in x['result']:
-            if d[0].startswith('OK'):
-                i += 1 
-                total_time += d[1]
-                total_delete_time += d[2]
-                deadlocks += d[3] 
-            else:
-                errors += 1
-    sql = list(filter(lambda r: 'sql' in r['name'] and r['name'].startswith(pattern), result['profile']) for result in results)
-    acc = defaultdict(lambda: {'callcount': 0, 'time': 0.0})    
-    for result in sql:
-        for call in result:
-            acc[call['name']]['callcount'] += call['callcount']
-            acc[call['name']]['time'] += call['time']
-
-    if i:
-        print 'Errors:', errors
-        print 'Deadlocks:', deadlocks
-        print 'Average time for each change is %.2fms and deletion is %.2fms' % ((total_time / i) * 1000, (total_delete_time / i) * 1000)
-        for name, data in acc.iteritems():
-            i = len(pattern)
-            n = name[i:name.index("'", i)]
-            print '\t%s: %d calls, %.2fms' % (n, data['callcount'], data['time'] * 1000) 
-        #pprint(dict(acc))
-
 def get_solutions():
     from importlib import import_module
     import pkgutil
@@ -193,6 +162,6 @@ if __name__ == '__main__':
         result = list(tester.run(NUM_WORKERS))
         end = time.time()
         print 'Time %.2f secs' % (end - start)
-        display_results(result)
+        results.display_results(end - start, result)
         time.sleep(1)
 
