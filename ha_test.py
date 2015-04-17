@@ -25,59 +25,45 @@ DB_PASS = 'wspass'
 LOG = logging
 LOG.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 
-class WrongDataException(Exception):
-    pass
-
 #def create_node_connections():
         
 def check_volume(db_cfg, vol_id, data):
-    def _check_volume(nodes):
-        for node in nodes:
+    def _check_volume(dbs):
+        for node in dbs:
             LOG.debug('Checking node %s for %s', node, data)
-            with node[1].begin():
-                LOG.debug('getting data from %s', node[0])
-                vol = node[1].query(db.Volume).get(vol_id)
-                LOG.debug('received data from %s', node[0])
-                for k, v in data.iteritems():
-                    d = getattr(vol, k)
-                    if d != v:
-                        LOG.debug('Error on key %s: %s != %s', k, v, d)
-                        raise WrongDataException('Wrong data in server %s in %s, key %s %s != %s' % (node[2], vol_id, k, v, d))
+            node.check_volume(vol_id, data)
 
-    def _close_dbs(nodes):
-        for node in nodes:
-            node[0].close()
+    def _close_dbs(dbs):
+        for node in dbs:
+            node.close()
 
     def _create_dbs(db_cfg):
-        nodes = []
         db_cfg = db_cfg.copy()
-        for node_ip in db_cfg.get('nodes_ips', []):
-            db_cfg['ip'] = node_ip
-            database = db.Db(session_cfg={'autocommit': True, 'expire_on_commit': True}, **db_cfg)
-            session = database.session
-            nodes.append((database, session, node_ip))
-        return nodes
+        del db_cfg['ip']
+        return (db.Db(ip=ip, **db_cfg) for ip in db_cfg.get('nodes_ips', []))
 
-    nodes = _create_dbs(db_cfg)
+    dbs = _create_dbs(db_cfg)
 
     num_tries = 6
     i = 0
     while True:
         try:
-            _check_volume(nodes)
-            _close_dbs(nodes)
+            _check_volume(dbs)
+            _close_dbs(dbs)
             return
         except Exception as e:
             if i < num_tries - 1:
-                if isinstance(e, WrongDataException):
-                    LOG.debug('Check retry, possible propagation delay with changes %s', data)
+                if isinstance(e, db.WrongDataException):
+                    LOG.debug('Check retry, possible propagation delay with '
+                              'changes %s', data)
                     i += 1
                 else:
-                    LOG.debug('Exception on check, this retry doesn\'t count: %s', e)
+                    LOG.debug('Check exception, retry doesn\'t count: %s', e)
                 time.sleep(0.25 * (i+1))
             else:
                 LOG.error('Checking %s', data)
                 raise
+
 
 def prepare_profile_info(profile):
     result = map(
@@ -114,7 +100,7 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
                 try:
                     ex = None
                     check_volume(db_cfg, vol_id, {'status': 'deleting', 'attach_status': marker})
-                except WrongDataException:
+                except db.WrongDataException:
                     raise
                 except Exception as e:
                     ex = e
@@ -148,14 +134,6 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
     LOG.info('Worker %s has finished', worker_id)
     return {'id': worker_id, 'result': results, 'profile': prepare_profile_info(profile)}
 
-
-def populate_database(db_data, num_rows):
-    database = db.Db(**db_data)
-    database.create_table()
-    database.populate(num_rows)
-    uuids = database.current_uuids
-    database.close()
-    return (uuids)
 
 def display_results(results):
     pattern = "<method '"
@@ -206,7 +184,7 @@ if __name__ == '__main__':
         'pwd': DB_PASS,
         'ip': HAPROXY_IP,
         'nodes_ips': DB_NODES}
-    uuids = populate_database(db_data, NUM_ROWS)
+    uuids = db.populate_database(db_data, NUM_ROWS)
 
     for solution in solutions:
         print '\nRunning', solution.__name__
