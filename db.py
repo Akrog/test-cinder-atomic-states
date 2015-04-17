@@ -26,7 +26,7 @@ class Volume(Base):
 
 
 class Db(object):
-    def __init__(self, user, pwd, ip='127.0.0.1', db_name='cinder', session_cfg={}):
+    def __init__(self, user, pwd, ip='127.0.0.1', db_name='cinder', session_cfg={}, *args, **kwargs):
         self.ip = ip
         self.user = user
         self.pwd = pwd

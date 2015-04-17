@@ -12,7 +12,7 @@ from sqlalchemy.exc import OperationalError
 import logging
 
 NUM_ROWS = 5
-WORKERS_PER_ROW = 100
+WORKERS_PER_ROW = 2
 NUM_TESTS_PER_WORKER = 10
 
 NUM_WORKERS = NUM_ROWS*WORKERS_PER_ROW
@@ -51,8 +51,7 @@ def check_volume(db_cfg, vol_id, data):
     def _create_dbs(db_cfg):
         nodes = []
         db_cfg = db_cfg.copy()
-        nodes_ips = db_cfg.pop('nodes_ips', [])
-        for node_ip in nodes_ips:
+        for node_ip in db_cfg.get('nodes_ips', []):
             db_cfg['ip'] = node_ip
             database = db.Db(session_cfg={'autocommit': True, 'expire_on_commit': True}, **db_cfg)
             session = database.session
@@ -93,11 +92,8 @@ def prepare_profile_info(profile):
 
 def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **kwargs):
     db_cfg = db_data.copy()
-    db_data.pop('nodes_ips', [])
-
-    if session_cfg:
-        db_data['session_cfg'] = session_cfg
-    database = db.Db(**db_data)
+    database = db.Db(session_cfg=session_cfg, **db_cfg)
+    
     session = database.session
        
     results = []
@@ -205,13 +201,15 @@ def get_solutions():
 
 if __name__ == '__main__':
     solutions = get_solutions()
-    db_data = {'user': DB_USER, 'pwd': DB_PASS, 'ip': HAPROXY_IP}
+    db_data = {
+        'user': DB_USER,
+        'pwd': DB_PASS,
+        'ip': HAPROXY_IP,
+        'nodes_ips': DB_NODES}
     uuids = populate_database(db_data, NUM_ROWS)
-    db_data['nodes_ips'] = DB_NODES
 
     for solution in solutions:
         print '\nRunning', solution.__name__
-        #tester = Tester(do_test, None, db_data, solution.make_change, solution.session_cfg, uuids[0])
         tester = Tester(do_test, it.cycle(tuple({'args': (uuids[i],)} for i in xrange(NUM_ROWS))), db_data, solution.make_change, solution.session_cfg)
         start = time.time()
         result = list(tester.run(NUM_WORKERS))
