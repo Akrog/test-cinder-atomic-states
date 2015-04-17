@@ -97,7 +97,7 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
             profile.enable()
             time_start = time.time()
             r = changer(session, vol_id, 'available', 'deleting', marker)
-            #result.deadlocks, result.timeouts, result.lost_conn = r
+            #result.deadlocks, result.timeouts, result.disconnect = r
             result.deadlocks = r
             time_end = time.time()
             profile.disable()
@@ -130,7 +130,7 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
                     #result.deadlocks += r[0]
                     result.deadlocks += r
                     #result.timeouts += r[1]
-                    #result.lost_conn += r[2]
+                    #result.disconnect += r[2]
                     LOG.info('Changed %s to available', marker)
                 except OperationalError as e:
                     LOG.warning('ERROR changing to available %s: %s', marker, e)
@@ -172,6 +172,10 @@ if __name__ == '__main__':
 
     for solution in solutions:
         print '\nRunning', solution.__name__
+        print '\t%d workers' % NUM_WORKERS
+        print '\t%d rows' % NUM_ROWS
+        print '\t%d changes per worker' % NUM_TESTS_PER_WORKER
+
         tester = Tester(
             do_test,
             it.cycle({'args': (uuid,)} for uuid in uuids),
