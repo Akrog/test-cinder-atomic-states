@@ -10,7 +10,7 @@ import time
 from sqlalchemy.exc import OperationalError
 
 import db
-import results
+import test_results
 from tester import Tester
 
 NUM_ROWS = 5
@@ -168,6 +168,6 @@ if __name__ == '__main__':
         start = time.time()
         result = list(tester.run(NUM_WORKERS))
         end = time.time()
-        results.display_results(end - start, result)
+        test_results.display_results(end - start, result)
         time.sleep(1)
 
