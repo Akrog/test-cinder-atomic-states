@@ -145,7 +145,7 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
             #session.rollback()
             result.status = 'Exception %s' % e
         finally:
-            result.profile = test_results.prepare_profile_info(profile)
+            result.profile = test_results.map_profile_info(profile)
             results.append(result)
     LOG.info('Worker %s has finished', worker_id)
     return results
