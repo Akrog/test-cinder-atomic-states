@@ -70,17 +70,6 @@ def check_volume(db_cfg, vol_id, data):
                 raise
 
 
-def prepare_profile_info(profile):
-    result = map(
-        lambda p: {
-            'callcount': p.callcount, 
-            'time': p.totaltime, 
-            'name': p.code if isinstance(p.code, str) else p.code.co_name, 
-            'file': None if isinstance(p.code, str) else p.code.co_filename},
-        profile.getstats())
-    return result
-
-
 def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None,
             *args, **kwargs):
     db_cfg = db_data.copy()
@@ -141,10 +130,13 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None,
                 #session.rollback()
                 results.append(("Exception on %s: %s" % (i, e), None, None, 0))
     LOG.info('Worker %s has finished', worker_id)
-    return {'id': worker_id, 'result': results, 'profile': prepare_profile_info(profile)}
+    return {'id': worker_id,
+            'result': results,
+            'profile': test_results.prepare_profile_info(profile)}
 
 
 def get_solutions():
+    """Return loaded solution libraries existing in solutions directory."""
     from importlib import import_module
     import pkgutil
 

@@ -40,3 +40,14 @@ def display_results(total_time, results):
                                               data['time'] * 1000) 
 
     #pprint(dict(acc))
+
+
+def prepare_profile_info(profile):
+    result = map(
+        lambda p: {
+            'callcount': p.callcount, 
+            'time': p.totaltime, 
+            'name': p.code if isinstance(p.code, str) else p.code.co_name, 
+            'file': None if isinstance(p.code, str) else p.code.co_filename},
+        profile.getstats())
+    return result
