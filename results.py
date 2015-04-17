@@ -1,5 +1,6 @@
 
 from collections import defaultdict
+from pprint import pprint
 
 def display_results(total_time, results):
     print 'Total running time %.2f secs (includes DB checks)' % total_time
@@ -38,3 +39,5 @@ def display_results(total_time, results):
             n = name[i:name.index("'", i)]
             print '\t%s: %d calls, %.2fms' % (n, data['callcount'],
                                               data['time'] * 1000) 
+
+    #pprint(dict(acc))

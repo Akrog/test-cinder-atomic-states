@@ -25,11 +25,13 @@ DB_USER = 'wsrep_sst'
 DB_PASS = 'wspass'
 
 LOG = logging
-LOG.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
+LOG.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 
-#def create_node_connections():
         
 def check_volume(db_cfg, vol_id, data):
+    """Check that a volumes has the same data in all cluster nodes."""
     def _check_volume(dbs):
         for node in dbs:
             LOG.debug('Checking node %s for %s', node, data)
@@ -64,6 +66,7 @@ def check_volume(db_cfg, vol_id, data):
                 time.sleep(0.25 * (i+1))
             else:
                 LOG.error('Checking %s', data)
+                _close_dbs(dbs)
                 raise
 
 
@@ -78,7 +81,8 @@ def prepare_profile_info(profile):
     return result
 
 
-def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **kwargs):
+def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None,
+            *args, **kwargs):
     db_cfg = db_data.copy()
     database = db.Db(session_cfg=session_cfg, **db_cfg)
     
@@ -86,19 +90,20 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
        
     results = []
     vol_id = vol_id or database.current_uuids[0]
-    with db.profiled() as profile:
+    with db.profiled(enabled=False) as profile:
         for i in xrange(NUM_TESTS_PER_WORKER):
             try:
                 marker = '%s_%s' % (worker_id, i)
                 LOG.info('Start %s', marker)
                 time.sleep(0.005)
+                profile.enable()
                 time_start = time.time()
                 deadlocks = changer(session, vol_id, 'available', 'deleting', marker)
                 time_end = time.time()
+                profile.disable()
                 change_1_time = time_end - time_start
                 LOG.info('Checking deleting %s', marker)
                 t = time.time()
-                profile.disable()
                 try:
                     ex = None
                     check_volume(db_cfg, vol_id, {'status': 'deleting', 'attach_status': marker})
@@ -107,15 +112,19 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
                 except Exception as e:
                     ex = e
                     LOG.error('On check volume %s: %s', marker, e)
-                profile.enable()
                 s = time.time()
                 LOG.info('Check OK for %s', marker)
 
-                time_start = time.time()
+                change_2_time = 0.0
                 while True:
                     try:
                         LOG.info('Changing %s to available', marker)
+                        profile.enable()
+                        time_start = time.time()
                         deadlocks += changer(session, vol_id, 'deleting', 'available', marker)
+                        time_end = time.time()
+                        profile.disable()
+                        change_2_time += time_end - time_start
                         LOG.info('Changed %s to available', marker)
                     except OperationalError as e:
                         LOG.warning('ERROR changing to available %s: %s', marker, e)
@@ -126,8 +135,6 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
                     else:
                         break
                     # We cannot let it on deleting or it will prevent other workers from doing anything
-                time_end = time.time()
-                change_2_time = time_end - time_start
                 results.append(('OK %s' % i, change_1_time, change_2_time, deadlocks))
             except Exception as e:
                 LOG.error('On %s: %s', marker, e)
@@ -161,7 +168,6 @@ if __name__ == '__main__':
         start = time.time()
         result = list(tester.run(NUM_WORKERS))
         end = time.time()
-        print 'Time %.2f secs' % (end - start)
         results.display_results(end - start, result)
         time.sleep(1)
 
