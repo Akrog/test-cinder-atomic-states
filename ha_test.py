@@ -11,36 +11,68 @@ import time
 from sqlalchemy.exc import OperationalError
 import logging
 
-NUM_WORKERS = 5 
-NUM_TESTS_PER_WORKER = 100
+NUM_ROWS = 5
+WORKERS_PER_ROW = 100
+NUM_TESTS_PER_WORKER = 10
+
+NUM_WORKERS = NUM_ROWS*WORKERS_PER_ROW
 
 LOG = logging
 LOG.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 
+class WrongDataException(Exception):
+    pass
 
-def check_volume(nodes, vol_id, data):
-    def _check_volume():
+#def create_node_connections():
+        
+def check_volume(db_cfg, vol_id, data):
+    def _check_volume(nodes):
         for node in nodes:
             LOG.debug('Checking node %s for %s', node, data)
-            # Check directly through the engine to avoid transactions and caching
-            vol = node[1].bind.execute("select * from volumes where id='" + vol_id + "'").first()
-            for k, v in data.iteritems():
-                d = getattr(vol, k)
-                if d != v:
-                    LOG.debug('Error on key %s: %s != %s', k, v, d)
-                    raise Exception('Wrong data in server %s in %s, key %s %s != %s' % (node[2], vol_id, k, v, d))
+            with node[1].begin():
+                LOG.debug('getting data from %s', node[0])
+                vol = node[1].query(db.Volume).get(vol_id)
+                LOG.debug('received data from %s', node[0])
+                for k, v in data.iteritems():
+                    d = getattr(vol, k)
+                    if d != v:
+                        LOG.debug('Error on key %s: %s != %s', k, v, d)
+                        raise WrongDataException('Wrong data in server %s in %s, key %s %s != %s' % (node[2], vol_id, k, v, d))
 
-    num_tries = 3
-    for i in xrange(num_tries):
+    def _close_dbs(nodes):
+        for node in nodes:
+            node[0].close()
+
+    def _create_dbs(db_cfg):
+        nodes = []
+        db_cfg = db_cfg.copy()
+        nodes_ips = db_cfg.pop('nodes_ips', [])
+        for node_ip in nodes_ips:
+            db_cfg['ip'] = node_ip
+            database = db.Db(session_cfg={'autocommit': True, 'expire_on_commit': True}, **db_cfg)
+            session = database.session
+            nodes.append((database, session, node_ip))
+        return nodes
+
+    nodes = _create_dbs(db_cfg)
+
+    num_tries = 6
+    i = 0
+    while True:
         try:
-            _check_volume()
+            _check_volume(nodes)
+            _close_dbs(nodes)
             return
-        except:
+        except Exception as e:
             if i < num_tries - 1:
-                LOG.warning('Check retry, possible propagation delay with changes %s', data)
-                time.sleep(1 * (i+1))
+                if isinstance(e, WrongDataException):
+                    LOG.debug('Check retry, possible propagation delay with changes %s', data)
+                    i += 1
+                else:
+                    LOG.debug('Exception on check, this retry doesn\'t count: %s', e)
+                time.sleep(0.25 * (i+1))
             else:
-                LOG.debug('Checking %s', data)
+                LOG.error('Checking %s', data)
                 raise
 
 def prepare_profile_info(profile):
@@ -55,15 +87,8 @@ def prepare_profile_info(profile):
 
 
 def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **kwargs):
-    node_ips = db_data.pop('node_ips', [])
-
     db_cfg = db_data.copy()
-    nodes = []
-    for node_ip in node_ips:
-        db_cfg['ip'] = node_ip
-        database = db.Db(**db_data)
-        session = database.session
-        nodes.append((database, session, node_ip))
+    db_data.pop('nodes_ips', [])
 
     if session_cfg:
         db_data['session_cfg'] = session_cfg
@@ -83,9 +108,18 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
                 time_end = time.time()
                 change_1_time = time_end - time_start
                 LOG.info('Checking deleting %s', marker)
+                t = time.time()
                 profile.disable()
-                check_volume(nodes, vol_id, {'status': 'deleting', 'attach_status': marker})
+                try:
+                    ex = None
+                    check_volume(db_cfg, vol_id, {'status': 'deleting', 'attach_status': marker})
+                except WrongDataException:
+                    raise
+                except Exception as e:
+                    ex = e
+                    LOG.error('On check volume %s: %s', marker, e)
                 profile.enable()
+                s = time.time()
                 LOG.info('Check OK for %s', marker)
 
                 time_start = time.time()
@@ -97,6 +131,9 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
                     except OperationalError as e:
                         LOG.warning('ERROR changing to available %s: %s', marker, e)
                         session.rollback()
+                    except:
+                        LOG.warning('Unexpected changing %s: %s', marker, e)
+                        session.rollback()
                     else:
                         break
                     # We cannot let it on deleting or it will prevent other workers from doing anything
@@ -105,7 +142,7 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
                 results.append(('OK %s' % i, change_1_time, change_2_time, deadlocks))
             except Exception as e:
                 LOG.error('On %s: %s', marker, e)
-                session.rollback()
+                #session.rollback()
                 results.append(("Exception on %s: %s" % (i, e), None, None, 0))
     LOG.info('Worker %s has finished', worker_id)
     return {'id': worker_id, 'result': results, 'profile': prepare_profile_info(profile)}
@@ -165,15 +202,16 @@ if __name__ == '__main__':
     solutions = get_solutions()
     db_data = {'user': 'wsrep_sst', 'pwd': 'wspass', 'ip': '192.168.1.14'}
     uuids = populate_database(db_data['user'], db_data['pwd'], db_data['ip'])
-    db_data['node_ips'] = ['192.168.1.15', '192.168.1.16', '192.168.1.17']
+    db_data['nodes_ips'] = ['192.168.1.15', '192.168.1.16', '192.168.1.17']
 
     for solution in solutions:
         print '\nRunning', solution.__name__
         #tester = Tester(do_test, None, db_data, solution.make_change, solution.session_cfg, uuids[0])
-        tester = Tester(do_test, it.repeat({'args': (uuids[0],)}), db_data, solution.make_change, solution.session_cfg)
+        tester = Tester(do_test, it.cycle(tuple({'args': (uuids[i],)} for i in xrange(NUM_ROWS))), db_data, solution.make_change, solution.session_cfg)
         start = time.time()
         result = list(tester.run(NUM_WORKERS))
         end = time.time()
         print 'Time %.2f secs' % (end - start)
         display_results(result)
+        time.sleep(1)
 
