@@ -17,6 +17,11 @@ NUM_TESTS_PER_WORKER = 10
 
 NUM_WORKERS = NUM_ROWS*WORKERS_PER_ROW
 
+HAPROXY_IP = '192.168.1.14'
+DB_NODES = ('192.168.1.15', '192.168.1.16', '192.168.1.17')
+DB_USER = 'wsrep_sst'
+DB_PASS = 'wspass'
+
 LOG = logging
 LOG.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 
@@ -148,10 +153,10 @@ def do_test(worker_id, db_data, changer, session_cfg={}, vol_id=None, *args, **k
     return {'id': worker_id, 'result': results, 'profile': prepare_profile_info(profile)}
 
 
-def populate_database(user, passwd, ip):
-    database = db.Db(user=user, pwd=passwd, ip=ip)
+def populate_database(db_data, num_rows):
+    database = db.Db(**db_data)
     database.create_table()
-    database.populate()
+    database.populate(num_rows)
     uuids = database.current_uuids
     database.close()
     return (uuids)
@@ -200,9 +205,9 @@ def get_solutions():
 
 if __name__ == '__main__':
     solutions = get_solutions()
-    db_data = {'user': 'wsrep_sst', 'pwd': 'wspass', 'ip': '192.168.1.14'}
-    uuids = populate_database(db_data['user'], db_data['pwd'], db_data['ip'])
-    db_data['nodes_ips'] = ['192.168.1.15', '192.168.1.16', '192.168.1.17']
+    db_data = {'user': DB_USER, 'pwd': DB_PASS, 'ip': HAPROXY_IP}
+    uuids = populate_database(db_data, NUM_ROWS)
+    db_data['nodes_ips'] = DB_NODES
 
     for solution in solutions:
         print '\nRunning', solution.__name__
