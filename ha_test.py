@@ -3,6 +3,7 @@
 from pprint import pprint
 import pdb
 
+import cProfile
 import itertools as it
 import logging
 import time
@@ -13,8 +14,8 @@ import db
 import test_results
 from tester import Tester
 
-NUM_ROWS = 5
-WORKERS_PER_ROW = 2
+NUM_ROWS = 2 
+WORKERS_PER_ROW = 3
 NUM_TESTS_PER_WORKER = 10
 
 NUM_WORKERS = NUM_ROWS*WORKERS_PER_ROW
@@ -85,60 +86,69 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
  
     results = []
     vol_id = vol_id or database.current_uuids[0]
-    with db.profiled(enabled=False) as profile:
-        for i in xrange(num_tests):
-            try:
-                marker = '%s_%s' % (worker_id, i)
-                LOG.info('Start %s', marker)
-                time.sleep(0.005)
-                profile.enable()
-                time_start = time.time()
-                deadlocks = changer(session, vol_id, 'available', 'deleting', marker)
-                time_end = time.time()
-                profile.disable()
-                change_1_time = time_end - time_start
-                LOG.info('Checking deleting %s', marker)
-                t = time.time()
-                try:
-                    ex = None
-                    check_volume(db_cfg, vol_id, {'status': 'deleting', 'attach_status': marker})
-                except db.WrongDataException:
-                    raise
-                except Exception as e:
-                    ex = e
-                    LOG.error('On check volume %s: %s', marker, e)
-                s = time.time()
-                LOG.info('Check OK for %s', marker)
 
-                change_2_time = 0.0
-                while True:
-                    try:
-                        LOG.info('Changing %s to available', marker)
-                        profile.enable()
-                        time_start = time.time()
-                        deadlocks += changer(session, vol_id, 'deleting', 'available', marker)
-                        time_end = time.time()
-                        profile.disable()
-                        change_2_time += time_end - time_start
-                        LOG.info('Changed %s to available', marker)
-                    except OperationalError as e:
-                        LOG.warning('ERROR changing to available %s: %s', marker, e)
-                        session.rollback()
-                    except:
-                        LOG.warning('Unexpected changing %s: %s', marker, e)
-                        session.rollback()
-                    else:
-                        break
-                    # We cannot let it on deleting or it will prevent other workers from doing anything
-                results.append(('OK %s' % i, change_1_time, change_2_time, deadlocks))
+    profile = cProfile.Profile()
+    for i in xrange(num_tests):
+        result = test_results.ResultDataPoint(worker=worker_id, num_test=i)
+        try:
+            marker = '%s_%s' % (worker_id, i)
+            LOG.info('Start %s', marker)
+            time.sleep(0.005)
+            profile.enable()
+            time_start = time.time()
+            r = changer(session, vol_id, 'available', 'deleting', marker)
+            #result.deadlocks, result.timeouts, result.lost_conn = r
+            result.deadlocks = r
+            time_end = time.time()
+            profile.disable()
+            result.acquire = time_end - time_start
+            LOG.info('Checking deleting %s', marker)
+            t = time.time()
+            try:
+                ex = None
+                check_volume(db_cfg, vol_id, {'status': 'deleting', 'attach_status': marker})
+            except db.WrongDataException:
+                raise
             except Exception as e:
-                LOG.error('On %s: %s', marker, e)
-                #session.rollback()
-                results.append(("Exception on %s: %s" % (i, e), None, None, 0))
+                ex = e
+                LOG.error('On check volume %s: %s', marker, e)
+            s = time.time()
+            LOG.info('Check OK for %s', marker)
+
+            # We cannot let it on deleting or it will prevent other workers from doing anything
+            result.release = 0.0
+            while True:
+                try:
+                    LOG.info('Changing %s to available', marker)
+                    profile.enable()
+                    time_start = time.time()
+                    r = changer(session, vol_id, 'deleting', 'available',
+                                marker)
+                    time_end = time.time()
+                    profile.disable()
+                    result.release += time_end - time_start
+                    #result.deadlocks += r[0]
+                    result.deadlocks += r
+                    #result.timeouts += r[1]
+                    #result.lost_conn += r[2]
+                    LOG.info('Changed %s to available', marker)
+                except OperationalError as e:
+                    LOG.warning('ERROR changing to available %s: %s', marker, e)
+                    session.rollback()
+                except:
+                    LOG.warning('Unexpected changing %s: %s', marker, e)
+                    session.rollback()
+                else:
+                    break
+        except Exception as e:
+            LOG.error('On %s: %s', marker, e)
+            #session.rollback()
+            result.status = 'Exception %s' % e
+        finally:
+            result.profile = test_results.prepare_profile_info(profile)
+            results.append(result)
     LOG.info('Worker %s has finished', worker_id)
-    return {'id': worker_id,
-            'result': results,
-            'profile': test_results.prepare_profile_info(profile)}
+    return results
 
 
 def get_solutions():
@@ -170,7 +180,7 @@ if __name__ == '__main__':
             solution.make_change,
             solution.session_cfg)
         start = time.time()
-        result = list(tester.run(NUM_WORKERS))
+        result = list(it.chain(*tester.run(NUM_WORKERS)))
         end = time.time()
         test_results.display_results(end - start, result)
         time.sleep(1)
