@@ -147,3 +147,43 @@ def retry_on_operational_error(method_or_which_cases):
         return wrapper(method_or_which_cases, ALL_RETRIES)
 
     return wrapper
+
+
+def check_volume(LOG, db_cfg, vol_id, data):
+    """Check that a volumes has the same data in all cluster nodes."""
+    def _check_volume(dbs):
+        for node in dbs:
+            LOG.debug('Checking node %s for %s', node, data)
+            node.check_volume(vol_id, data)
+
+    def _close_dbs(dbs):
+        for node in dbs:
+            node.close()
+
+    def _create_dbs(db_cfg):
+        db_cfg = db_cfg.copy()
+        del db_cfg['ip']
+        return (Db(ip=ip, **db_cfg) for ip in db_cfg.get('nodes_ips', []))
+
+    dbs = _create_dbs(db_cfg)
+
+    num_tries = 6
+    i = 0
+    while True:
+        try:
+            _check_volume(dbs)
+            _close_dbs(dbs)
+            return
+        except Exception as e:
+            if i < num_tries - 1:
+                if isinstance(e, WrongDataException):
+                    LOG.debug('Check retry, possible propagation delay with '
+                              'changes %s', data)
+                    i += 1
+                else:
+                    LOG.debug('Check exception, retry doesn\'t count: %s', e)
+                time.sleep(0.25 * (i+1))
+            else:
+                LOG.error('Checking %s', data)
+                _close_dbs(dbs)
+                raise

@@ -36,46 +36,6 @@ LOG.basicConfig(
     format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 
 
-def check_volume(db_cfg, vol_id, data):
-    """Check that a volumes has the same data in all cluster nodes."""
-    def _check_volume(dbs):
-        for node in dbs:
-            LOG.debug('Checking node %s for %s', node, data)
-            node.check_volume(vol_id, data)
-
-    def _close_dbs(dbs):
-        for node in dbs:
-            node.close()
-
-    def _create_dbs(db_cfg):
-        db_cfg = db_cfg.copy()
-        del db_cfg['ip']
-        return (db.Db(ip=ip, **db_cfg) for ip in db_cfg.get('nodes_ips', []))
-
-    dbs = _create_dbs(db_cfg)
-
-    num_tries = 6
-    i = 0
-    while True:
-        try:
-            _check_volume(dbs)
-            _close_dbs(dbs)
-            return
-        except Exception as e:
-            if i < num_tries - 1:
-                if isinstance(e, db.WrongDataException):
-                    LOG.debug('Check retry, possible propagation delay with '
-                              'changes %s', data)
-                    i += 1
-                else:
-                    LOG.debug('Check exception, retry doesn\'t count: %s', e)
-                time.sleep(0.25 * (i+1))
-            else:
-                LOG.error('Checking %s', data)
-                _close_dbs(dbs)
-                raise
-
-
 def do_test(worker_id, num_tests, db_data, changer, session_cfg={},
             vol_id=None, delete_time=0.01, *args, **kwargs):
     """Perform tests for atomic changes of rows in the database.
@@ -111,8 +71,9 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={},
             LOG.info('Checking deleting %s', marker)
             try:
                 ex = None
-                check_volume(db_cfg, vol_id,
-                             {'status': 'deleting', 'attach_status': marker})
+                db.check_volume(LOG, db_cfg, vol_id,
+                                {'status': 'deleting',
+                                 'attach_status': marker})
             except db.WrongDataException:
                 raise
             except Exception as e:
