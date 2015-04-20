@@ -11,9 +11,10 @@ import db
 import test_results
 from tester import Tester
 
-NUM_ROWS = 2
-WORKERS_PER_ROW = 3
-NUM_TESTS_PER_WORKER = 10
+NUM_ROWS = 2  # How many different rows are available
+WORKERS_PER_ROW = 3  # How many workes will be fighting for each row
+NUM_TESTS_PER_WORKER = 10  # How many deleting-available changes to make
+DELETE_TIME = 0.01  # Simulated delete time
 
 NUM_WORKERS = NUM_ROWS*WORKERS_PER_ROW
 
@@ -69,7 +70,7 @@ def check_volume(db_cfg, vol_id, data):
 
 
 def do_test(worker_id, num_tests, db_data, changer, session_cfg={},
-            vol_id=None, *args, **kwargs):
+            vol_id=None, delete_time=0.01, *args, **kwargs):
     """Perform tests for atomic changes of rows in the database.
 
     Will perform num_tests changes from available to deleting and back to
@@ -111,6 +112,8 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={},
                 ex = e
                 LOG.error('On check volume %s: %s', marker, ex)
             LOG.info('Check OK for %s', marker)
+
+            time.sleep(delete_time)
 
             # We cannot let it on deleting or it will prevent other workers
             # from doing anything
@@ -183,7 +186,8 @@ if __name__ == '__main__':
             NUM_TESTS_PER_WORKER,
             db_data,
             solution.make_change,
-            solution.session_cfg)
+            solution.session_cfg,
+            delete_time=DELETE_TIME)
         start = time.time()
         result = list(it.chain(*tester.run(NUM_WORKERS)))
         end = time.time()

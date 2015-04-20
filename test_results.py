@@ -1,14 +1,13 @@
 from collections import defaultdict
-import itertools as it
 import math
 import operator as op
-from pprint import pprint
 
 
 class ResultDataPoint(object):
     """Object to store results for 1 row change."""
-    def __init__(self, worker=0, num_test=0, status='OK', acquire=0.0, release=0.0,
-                 profile=None, deadlocks=0, timeouts=0, disconnect=0):
+    def __init__(self, worker=0, num_test=0, status='OK', acquire=0.0,
+                 release=0.0, profile=None, deadlocks=0, timeouts=0,
+                 disconnect=0):
         self.worker = worker
         self.num_test = num_test
         self.acquire = acquire
@@ -40,6 +39,7 @@ def _calculate_stats(values, factor=1):
 def _prepare_profile(data):
     """Filter, group and prepare profiling data for printing."""
     PATTERN = "<method '"
+
     def _rename_call(name):
         i = len(PATTERN)
         return name[i:name.index("'", i)]
@@ -59,7 +59,6 @@ def display_results(total_time, results):
     """Display results for given a worker test results."""
     STATS = (('acquire', 1000), ('release', 1000), ('deadlocks', 1),
              ('timeouts', 1), ('disconnect', 1))
-    PATTERN = "<method '"
 
     print 'Total running time %.2f secs (includes DB checks)' % total_time
 
@@ -97,9 +96,9 @@ def map_profile_info(profile):
     """Map profiling information to that we consider relevant."""
     result = map(
         lambda p: {
-            'callcount': p.callcount, 
-            'time': p.totaltime, 
-            'name': p.code if isinstance(p.code, str) else p.code.co_name, 
+            'callcount': p.callcount,
+            'time': p.totaltime,
+            'name': p.code if isinstance(p.code, str) else p.code.co_name,
             'file': None if isinstance(p.code, str) else p.code.co_filename},
         profile.getstats())
     return result

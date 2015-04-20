@@ -15,9 +15,12 @@ def tooz_make_change(driver, url, session, vol_id, initial, destination,
     global coordinator
     global lock
 
+    # If coordinator is not the one we want we cannot reuse it
     if not isinstance(coordinator, driver):
         if coordinator:
             coordinator.stop()
+
+        # Create new coordinator and lock
         coordinator = coordination.get_coordinator(url, str(session))
         coordinator.start()
         lock = coordinator.get_lock(vol_id)
