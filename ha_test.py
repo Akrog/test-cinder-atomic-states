@@ -1,8 +1,5 @@
 #!/bin/env python
 
-from pprint import pprint
-import pdb
-
 import cProfile
 import itertools as it
 import logging
@@ -14,7 +11,7 @@ import db
 import test_results
 from tester import Tester
 
-NUM_ROWS = 2 
+NUM_ROWS = 2
 WORKERS_PER_ROW = 3
 NUM_TESTS_PER_WORKER = 10
 
@@ -30,7 +27,7 @@ LOG.basicConfig(
     level=logging.WARNING,
     format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 
-        
+
 def check_volume(db_cfg, vol_id, data):
     """Check that a volumes has the same data in all cluster nodes."""
     def _check_volume(dbs):
@@ -71,19 +68,19 @@ def check_volume(db_cfg, vol_id, data):
                 raise
 
 
-def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
-            *args, **kwargs):
+def do_test(worker_id, num_tests, db_data, changer, session_cfg={},
+            vol_id=None, *args, **kwargs):
     """Perform tests for atomic changes of rows in the database.
-    
+
     Will perform num_tests changes from available to deleting and back to
     available, always checking that changes are consistent across all nodes of
     the database.
     """
     db_cfg = db_data.copy()
     database = db.Db(session_cfg=session_cfg, **db_cfg)
-    
+
     session = database.session
- 
+
     results = []
     vol_id = vol_id or database.current_uuids[0]
 
@@ -104,19 +101,19 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
             profile.disable()
             result.acquire = time_end - time_start
             LOG.info('Checking deleting %s', marker)
-            t = time.time()
             try:
                 ex = None
-                check_volume(db_cfg, vol_id, {'status': 'deleting', 'attach_status': marker})
+                check_volume(db_cfg, vol_id,
+                             {'status': 'deleting', 'attach_status': marker})
             except db.WrongDataException:
                 raise
             except Exception as e:
                 ex = e
-                LOG.error('On check volume %s: %s', marker, e)
-            s = time.time()
+                LOG.error('On check volume %s: %s', marker, ex)
             LOG.info('Check OK for %s', marker)
 
-            # We cannot let it on deleting or it will prevent other workers from doing anything
+            # We cannot let it on deleting or it will prevent other workers
+            # from doing anything
             result.release = 0.0
             while True:
                 try:
@@ -134,7 +131,8 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
                         setattr(result, k, getattr(result, k) + v)
                     LOG.info('Changed %s to available', marker)
                 except OperationalError as e:
-                    LOG.warning('ERROR changing to available %s: %s', marker, e)
+                    LOG.warning('ERROR changing %s to available: %s',
+                                marker, e)
                     session.rollback()
                 except Exception as e:
                     LOG.warning('Unexpected changing %s: %s', marker, e)
@@ -143,7 +141,7 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={}, vol_id=None,
                     break
         except Exception as e:
             LOG.error('On %s: %s', marker, e)
-            #session.rollback()
+            # session.rollback()
             result.status = 'Exception %s' % e
         finally:
             result.profile = test_results.map_profile_info(profile)
@@ -191,4 +189,3 @@ if __name__ == '__main__':
         end = time.time()
         test_results.display_results(end - start, result)
         time.sleep(1)
-

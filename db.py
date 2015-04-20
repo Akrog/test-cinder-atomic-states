@@ -1,22 +1,15 @@
 #!/bin/env python
 
-import pdb
-
 import functools
-import os
 import time
 
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Column, String
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 import uuid
-from sqlalchemy import and_
 import cProfile
-import StringIO
-import pstats
 import contextlib
 
 
@@ -43,20 +36,17 @@ class Db(object):
         self.pwd = pwd
         self.db_name = db_name
 
-        # Create an engine that stores data in the local directory's
-        # sqlalchemy_example.db file.
-        #engine = create_engine('sqlite:///sqlalchemy_example.db')
         self.engine = create_engine('mysql://%s:%s@%s/%s?charset=utf8' %
                                     (user, pwd, ip, db_name))
 
-        #Base.metadata.create_all(engine)
+        # Base.metadata.create_all(engine)
         Base.metadata.bind = self.engine
 
         self.session = self.create_session(**session_cfg)
 
     def create_table(self):
         models = (Volume,)
- 
+
         # Create all tables in the engine. This is equivalent to "Create Table"
         # statements in raw SQL.
         for model in models:
@@ -78,7 +68,7 @@ class Db(object):
     @property
     def current_uuids(self):
         return map(lambda x: x[0], self.session.query(Volume.id).all())
-            
+
     def populate(self, num_volumes=10):
         with self.session.begin():
             missing = num_volumes - self.session.query(Volume).count()
@@ -96,7 +86,7 @@ class Db(object):
                 if d != v:
                     raise WrongDataException(
                         'Wrong data in server %s in %s, key %s, %s != %s' %
-                        (node[2], vol_id, k, v, d))
+                        (self.ip, vol_id, k, v, d))
 
 
 @contextlib.contextmanager
@@ -127,6 +117,7 @@ RETRY_GONE5 = ('disconnect', 2055, 'Lost connection to MySQL')
 ALL_RETRIES = (RETRY_TIMEOUT, RETRY_DEADLOCKS, RETRY_GONE, RETRY_GONE2,
                RETRY_GONE3, RETRY_GONE4, RETRY_GONE5)
 
+
 def retry_on_operational_error(method_or_which_cases):
     """Decorator to retry a DB API call if Deadlock was received."""
     def wrapper(f, which_cases=method_or_which_cases):
@@ -138,18 +129,14 @@ def retry_on_operational_error(method_or_which_cases):
                     f(session, *args, **kwargs)
                     return result
                 except OperationalError as e:
-                    #print 'Operational', e
                     for case in which_cases:
-                        #print 'Trying with', case
                         if e.args[0].startswith("(OperationalError) (%d, '%s" %
                                                 (case[1], case[2])):
-                            #print 'found'
                             result[case[0]] += 1
                             break
                     else:
                         raise
 
-                    #print 'retyring'
                     # We wait a little bit before retrying
                     time.sleep(0.01)
 

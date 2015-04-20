@@ -1,13 +1,13 @@
 import db
 import time
 from tooz import coordination
-import os
 
 
 session_cfg = {'autocommit': True, 'expire_on_commit': True}
 
 coordinator = None
 lock = None
+
 
 @db.retry_on_operational_error
 def tooz_make_change(driver, url, session, vol_id, initial, destination,

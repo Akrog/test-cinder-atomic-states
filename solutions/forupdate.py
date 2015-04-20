@@ -3,6 +3,7 @@ import time
 
 session_cfg = {'autocommit': True, 'expire_on_commit': True}
 
+
 @db.retry_on_operational_error
 def make_change(session, vol_id, initial, destination, attach_status):
     while True:
@@ -11,6 +12,5 @@ def make_change(session, vol_id, initial, destination, attach_status):
             if vol.status == initial:
                 vol.status = destination
                 vol.attach_status = attach_status
-                #session.commit()
                 return
-            time.sleep(0.01)
+           time.sleep(0.01)
