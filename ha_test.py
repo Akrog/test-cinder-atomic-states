@@ -9,12 +9,18 @@ from sqlalchemy.exc import OperationalError
 
 import db
 import test_results
-from tester import Tester
+import worker
+from workloaders import db_rw as wl_generator
+
 
 NUM_ROWS = 2  # How many different rows are available
 WORKERS_PER_ROW = 3  # How many workes will be fighting for each row
 NUM_TESTS_PER_WORKER = 10  # How many deleting-available changes to make
 DELETE_TIME = 0.01  # Simulated delete time
+
+SYN_DB_UPDATES_PER_GENERATOR = 5
+SYN_DB_SELECTS_PER_GENERATOR = 10
+SYN_DB_GENERATORS = 50
 
 NUM_WORKERS = NUM_ROWS*WORKERS_PER_ROW
 
@@ -166,7 +172,10 @@ def get_solutions():
 
 
 if __name__ == '__main__':
+    # get all solutions from solutions directory
     solutions = get_solutions()
+
+    # populate the database with enough different volumes
     db_data = {
         'user': DB_USER,
         'pwd': DB_PASS,
@@ -180,7 +189,7 @@ if __name__ == '__main__':
         print '\t%d rows' % NUM_ROWS
         print '\t%d changes per worker' % NUM_TESTS_PER_WORKER
 
-        tester = Tester(
+        testers = worker.Tester(
             do_test,
             it.cycle({'args': (uuid,)} for uuid in uuids),
             NUM_TESTS_PER_WORKER,
@@ -188,8 +197,24 @@ if __name__ == '__main__':
             solution.make_change,
             solution.session_cfg,
             delete_time=DELETE_TIME)
+
+        workloads = worker.Workloader(
+            wl_generator.do_workload,
+            None,
+            db_data,
+            num_selects=SYN_DB_SELECTS_PER_GENERATOR,
+            num_updates=SYN_DB_UPDATES_PER_GENERATOR)
+
+        # start workload generators
+        workloads.run(SYN_DB_GENERATORS)
+
+        # test solution
         start = time.time()
-        result = list(it.chain(*tester.run(NUM_WORKERS)))
+        result = tuple(it.chain(*testers.run(NUM_WORKERS)))
         end = time.time()
+
+        # stop workload generators
+        workloads.finish()
+
         test_results.display_results(end - start, result)
         time.sleep(1)
