@@ -153,8 +153,9 @@ def check_volume(LOG, db_cfg, vol_id, data):
     """Check that a volumes has the same data in all cluster nodes."""
     def _check_volume(dbs):
         for node in dbs:
-            LOG.debug('Checking node %s for %s', node, data)
+            LOG.debug('Checking node %s for %s', node.ip, data)
             node.check_volume(vol_id, data)
+            LOG.debug('\tdata on %s is ok', node.ip)
 
     def _close_dbs(dbs):
         for node in dbs:
@@ -163,7 +164,7 @@ def check_volume(LOG, db_cfg, vol_id, data):
     def _create_dbs(db_cfg):
         db_cfg = db_cfg.copy()
         del db_cfg['ip']
-        return (Db(ip=ip, **db_cfg) for ip in db_cfg.get('nodes_ips', []))
+        return tuple(Db(ip=ip, **db_cfg) for ip in db_cfg.get('nodes_ips', []))
 
     dbs = _create_dbs(db_cfg)
 
@@ -178,7 +179,7 @@ def check_volume(LOG, db_cfg, vol_id, data):
             if i < num_tries - 1:
                 if isinstance(e, WrongDataException):
                     LOG.debug('Check retry, possible propagation delay with '
-                              'changes %s', data)
+                              'changes %s (%s)', data, e)
                     i += 1
                 else:
                     LOG.debug('Check exception, retry doesn\'t count: %s', e)
