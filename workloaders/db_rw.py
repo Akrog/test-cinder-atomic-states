@@ -3,6 +3,8 @@
 import time
 import uuid
 
+from sqlalchemy.exc import IntegrityError
+
 import db
 
 
@@ -18,8 +20,15 @@ def do_workload(worker_id, stop, db_data, num_selects=10, num_updates=5,
                      **db_data)
 
     # Add a specific volume for our workload
-    my_uuid = uuid.uuid1()
-    database.session.add(db.Volume(id=my_uuid, status='available'))
+    while True:
+        my_uuid = uuid.uuid1()
+        try:
+            with database.session.begin():
+                database.session.add(db.Volume(id=my_uuid,
+                                               status='available'))
+                break
+        except IntegrityError:
+            pass
 
     # While shared stop value doesn't change
     while not stop.value:
