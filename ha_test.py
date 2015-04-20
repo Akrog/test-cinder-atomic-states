@@ -3,6 +3,7 @@
 import cProfile
 import itertools as it
 import logging
+import os
 import time
 
 from sqlalchemy.exc import OperationalError
@@ -15,7 +16,7 @@ from workloaders import db_rw as wl_generator
 DB_NAME = 'cinder'
 
 NUM_ROWS = 2  # How many different rows are available
-WORKERS_PER_ROW = 3  # How many workes will be fighting for each row
+WORKERS_PER_ROW = 10  # How many workes will be fighting for each row
 NUM_TESTS_PER_WORKER = 10  # How many deleting-available changes to make
 DELETE_TIME = 0.01  # Simulated delete time
 
@@ -29,6 +30,8 @@ HAPROXY_IP = '192.168.1.14'
 DB_NODES = ('192.168.1.15', '192.168.1.16', '192.168.1.17')
 DB_USER = 'wsrep_sst'
 DB_PASS = 'wspass'
+
+OUTPUT_FILE = os.getcwd() + '/results.csv'
 
 LOG = logging
 LOG.basicConfig(
@@ -136,6 +139,7 @@ def get_solutions():
 if __name__ == '__main__':
     # get all solutions from solutions directory
     solutions = get_solutions()
+    summaries = []
 
     # populate the database with enough different volumes
     db_data = {
@@ -179,5 +183,10 @@ if __name__ == '__main__':
         # stop workload generators
         workloads.finish()
 
-        test_results.display_results(end - start, result)
+        summary = test_results.summarize(solution, end - start, result)
+        summaries.append(summary)
+
+        test_results.display_results(summary)
         time.sleep(1)
+
+    test_results.write_csv(OUTPUT_FILE, summaries)

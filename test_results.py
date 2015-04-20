@@ -1,4 +1,5 @@
 from collections import defaultdict
+import csv
 import math
 import operator as op
 
@@ -17,6 +18,17 @@ class ResultDataPoint(object):
         self.deadlocks = deadlocks
         self.timeouts = timeouts
         self.disconnect = disconnect
+
+
+class Summary(object):
+    def __init__(self, total_time=0, solution=None, ok=0, errors=0, stats={},
+                 profile=[]):
+        self.total_time = total_time
+        self.solution = solution
+        self.ok = ok
+        self.errors = errors
+        self.stats = stats
+        self.profile = profile
 
 
 def _calculate_stats(values, factor=1):
@@ -55,12 +67,9 @@ def _prepare_profile(data):
     return result
 
 
-def display_results(total_time, results):
-    """Display results for given a worker test results."""
+def summarize(solution, total_time, results):
     STATS = (('acquire', 1000), ('release', 1000), ('deadlocks', 1),
              ('timeouts', 1), ('disconnect', 1))
-
-    print 'Total running time %.2f secs (includes DB checks)' % total_time
 
     # We'll only display stats on successful results
     results_ok = tuple(r for r in results if r.status == 'OK')
@@ -74,12 +83,21 @@ def display_results(total_time, results):
 
     profile = _prepare_profile(map(op.attrgetter('profile'), results_ok))
 
-    print 'OK:', len(results_ok)
-    print 'Errors:', errors
+    return Summary(total_time, solution.__name__, len(results_ok), errors,
+                   stats, profile)
+
+
+def display_results(summary):
+    """Display results for given a worker test results."""
+    print ('Total running time %.2f secs (includes DB checks)'
+           % summary.total_time)
+
+    print 'OK:', summary.ok
+    print 'Errors:', summary.errors
 
     # Display stats
     print 'Changes stats:'
-    for var, s in stats.iteritems():
+    for var, s in summary.stats.iteritems():
         print '\t%s:' % var,
         for x in s.iteritems():
             print '%s=%.2f' % x,
@@ -87,7 +105,7 @@ def display_results(total_time, results):
 
     # Display profiling data
     print 'Profiling data:'
-    for name, data in profile.iteritems():
+    for name, data in summary.profile.iteritems():
         print '\t%s: %d calls, %.2fms' % (name, data['callcount'],
                                           data['time'] * 1000)
 
@@ -102,3 +120,25 @@ def map_profile_info(profile):
             'file': None if isinstance(p.code, str) else p.code.co_filename},
         profile.getstats())
     return result
+
+
+def write_csv(filename, summaries):
+    """Write all results to CSV a file."""
+    data = [['solution', 'total time', 'ok', 'errors']]
+
+    for var, s in summaries[0].stats.iteritems():
+        for stat in s:
+            data[0].append('%s %s' % (var, stat))
+
+    for summary in summaries:
+        row = [summary.solution, summary.total_time, summary.ok,
+               summary.errors]
+        for s in summary.stats.itervalues():
+            for stat in s.itervalues():
+                row.append(stat)
+        data.append(row)
+
+    with open(filename, 'wb') as csv_file:
+        writer = csv.writer(csv_file)
+        for row in data:
+            writer.writerow(row)
