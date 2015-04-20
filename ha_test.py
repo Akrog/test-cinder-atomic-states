@@ -12,6 +12,7 @@ import test_results
 import worker
 from workloaders import db_rw as wl_generator
 
+DB_NAME = 'cinder'
 
 NUM_ROWS = 2  # How many different rows are available
 WORKERS_PER_ROW = 3  # How many workes will be fighting for each row
@@ -180,6 +181,7 @@ if __name__ == '__main__':
         'user': DB_USER,
         'pwd': DB_PASS,
         'ip': HAPROXY_IP,
+        'db_name': DB_NAME,
         'nodes_ips': DB_NODES}
     uuids = db.populate_database(db_data, NUM_ROWS)
 
