@@ -43,4 +43,6 @@ def do_workload(worker_id, stop, db_data, num_selects=10, num_updates=5,
     # We remove our volume after we have finished the tests
     with database.session.begin():
         database.session.delete(v)
+
+    database.close()
     return True
