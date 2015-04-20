@@ -35,6 +35,7 @@ def _calculate_stats(values, factor=1):
     """Calculate min, max, mean and stddev for values applying a factor."""
     result = {'min': min(values) * factor,
               'max': max(values) * factor,
+              'sum': sum(values) * factor,
               'mean': 0,
               'stddev': 0}
 
