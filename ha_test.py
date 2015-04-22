@@ -1,6 +1,7 @@
 #!/bin/env python
 
 import cProfile
+import gc
 import itertools as it
 import logging
 import os
@@ -188,6 +189,11 @@ if __name__ == '__main__':
 
         summary = test_results.summarize(solution, end - start, result)
         summaries.append(summary)
+
+        del workloads
+        del testers
+        del result
+        gc.collect()
 
         test_results.display_results(summary)
         time.sleep(1)
