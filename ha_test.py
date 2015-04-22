@@ -14,8 +14,8 @@ from workloaders import db_rw as wl_generator
 
 DB_NAME = 'cinder'
 
-NUM_ROWS = 5  # How many different rows are available
-WORKERS_PER_ROW = 40  # How many workes will be fighting for each row
+NUM_ROWS = 100  # How many different rows are available
+WORKERS_PER_ROW = 3  # How many workes will be fighting for each row
 NUM_TESTS_PER_WORKER = 10  # How many deleting-available changes to make
 DELETE_TIME = 0.01  # Simulated delete time
 

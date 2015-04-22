@@ -5,6 +5,7 @@ from sqlalchemy import and_
 session_cfg = {'autocommit': True, 'expire_on_commit': True}
 
 
+# Code extracted from https://review.openstack.org/#/c/109837/
 def safe_update(session, instance_id, values, expected_values):
     """Attempts to update the instance record in the database.
 

@@ -13,6 +13,7 @@ lock = None
 acquired = False
 
 
+# Code extracted from https://review.openstack.org/#/c/109837/
 def safe_update(session, instance_id, values, expected_values):
     conn = session.connection()
     inst_tab = db.Volume.__table__
@@ -44,7 +45,9 @@ def tooz_make_change(driver, url, session, vol_id, initial, destination,
         coordinator.start()
         lock = coordinator.get_lock(vol_id)
 
+    # When going from available to any other state we acquire the lock
     if initial == 'available':
+        # If this is a retry we've already acquired the lock
         if not acquired:
             while not lock.acquire():
                 coordinator.heartbeat()
@@ -57,11 +60,6 @@ def tooz_make_change(driver, url, session, vol_id, initial, destination,
                         {'status': destination,
                          'attach_status': attach_status},
                         {'status': initial})
-    # with session.begin():
-    #     vol = session.query(db.Volume).with_for_update().get(vol_id)
-    #     vol.status = destination
-    #     vol.attach_status = attach_status
-
     coordinator.heartbeat()
     if destination == 'available':
         lock.release()

@@ -123,7 +123,7 @@ def map_profile_info(profile):
     return result
 
 
-def write_csv(filename, summaries):
+def write_csv(filename, summaries, float_format='%.02f'):
     """Write all results to CSV a file."""
     data = [['solution', 'total time', 'ok', 'errors']]
 
@@ -132,11 +132,11 @@ def write_csv(filename, summaries):
             data[0].append('%s %s' % (var, stat))
 
     for summary in summaries:
-        row = [summary.solution, summary.total_time, summary.ok,
+        row = [summary.solution, float_format % summary.total_time, summary.ok,
                summary.errors]
         for s in summary.stats.itervalues():
             for stat in s.itervalues():
-                row.append(stat)
+                row.append(float_format % stat)
         data.append(row)
 
     with open(filename, 'wb') as csv_file:
