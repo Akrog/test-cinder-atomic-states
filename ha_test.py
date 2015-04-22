@@ -14,7 +14,7 @@ from workloaders import db_rw as wl_generator
 DB_NAME = 'cinder'
 
 NUM_ROWS = 5  # How many different rows are available
-WORKERS_PER_ROW = 20  # How many workes will be fighting for each row
+WORKERS_PER_ROW = 40  # How many workes will be fighting for each row
 NUM_TESTS_PER_WORKER = 10  # How many deleting-available changes to make
 DELETE_TIME = 0.01  # Simulated delete time
 
@@ -30,6 +30,8 @@ DB_USER = 'wsrep_sst'
 DB_PASS = 'wspass'
 
 OUTPUT_FILE = os.getcwd() + '/results.csv'
+
+ENABLE_PROFILING = False
 
 LOG = logging
 LOG.basicConfig(
@@ -68,7 +70,13 @@ def do_test(worker_id, num_tests, db_data, changer, session_cfg={},
     results = []
     vol_id = vol_id or database.current_uuids[0]
 
-    profile = cProfile.Profile()
+    if not ENABLE_PROFILING:
+        fake = lambda *args, **kwargs: tuple()
+        profile = fake
+        profile.__dict__ = {'enable': fake, 'disable': fake, 'getstats': fake}
+    else:
+        profile = cProfile.Profile()
+
     for i in xrange(num_tests):
         result = test_results.ResultDataPoint(worker=worker_id, num_test=i)
         try:
