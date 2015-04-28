@@ -181,18 +181,83 @@ Basically expects everything to work fine on the tests and if it doesn't it'll p
 
 **BEWARE:** By default the tests uses cinder DB and a table called volumes, so please don't have any relevant data there.
 
+# Links
+
+Since repositories are constantly changing links will point to the wrong place pretty quickly, so here are the methods they were meant to point to and the code it contained.
+
+####1 - def extend(self, context, volume, new_size):
+**[1a]:**
+```python
+if volume['status'] != 'available':
+```
+**[1b]:**
+```python
+self.update(context, volume, {'status': 'extending'})
+```
+**[1c]:**
+```python
+self.volume_rpcapi.extend_volume(context, volume, new_size,
+                                 reservations)
+```
+####2 - def copy_volume_to_image(self, context, volume, metadata, force):
+**[2a]:**
+```python
+self._check_volume_availability(volume, force)
+```
+**[2b]:**
+```python
+self.update(context, volume, {'status': 'uploading'})
+```
+**[2c]:**
+```python
+self.volume_rpcapi.copy_volume_to_image(context,
+                                        volume,
+                                        recv_metadata)
+```
+####3 - def delete_snapshot(self, context, snapshot, force=False):
+**[3a]:**
+```python
+if not force and snapshot['status'] not in ["available", "error"]:
+```
+**[3b]:**
+```python
+snapshot_obj.status = 'deleting'
+snapshot_obj.save(context)
+```
+**[3c]:**
+```python
+self.volume_rpcapi.delete_snapshot(context, snapshot_obj,
+                                   volume['host'])
+```
+
+####4 - def create(self, context, name, description, volume_id, container, incremental=False, availability_zone=None):
+**[4a]:**
+```python
+if volume['status'] != "available":
+```
+**[4b]:**
+```python
+self.db.volume_update(context, volume_id, {'status': 'backing-up'})
+```
+**[4c]:**
+```python
+self.backup_rpcapi.create_backup(context,
+                                 backup['host'],
+                                 backup['id'],
+                                 volume_id)
+```
 
 [Cinder]: https://wiki.openstack.org/wiki/Cinder
 [OpenStack]: https://www.openstack.org/
-[1a]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1185
-[1b]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1244
-[1c]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1255
-[2a]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1135
-[2b]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1174
-[2c]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1175
-[3a]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L869
-[3b]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L886
-[3c]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L890
+[1a]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1149
+[1b]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1188
+[1c]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1189
+[2a]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1106
+[2b]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1128
+[2c]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L1129
+[3a]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L876
+[3b]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L893
+[3c]: https://github.com/openstack/cinder/blob/master/cinder/volume/api.py#L897
 [4a]: https://github.com/openstack/cinder/blob/master/cinder/backup/api.py#L129
 [4b]: https://github.com/openstack/cinder/blob/master/cinder/backup/api.py#L194
 [4c]: https://github.com/openstack/cinder/blob/master/cinder/backup/api.py#L218
